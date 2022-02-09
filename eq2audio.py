@@ -2,6 +2,7 @@
 USER QuakeCoRE 2021/22
 Earthquakes to Audio
 Author: Cameron Davis
+Releases: https://github.com/Cameron-cpd/eq2audio/releases
 """
 
 # Specify the recording names and folder/event names, for each event list all .000 files then all .090 files
@@ -12,7 +13,7 @@ in_g = False # If the recordings are in units of g put True, if they are in unit
 
 make_ani = False # If you want to create an animation for each recording put True
 # Creating the animation takes a while so it is best on one recording at a time and only in the area of interest
-# Set the variables for animating a time cursor moving across plots of the clipped ground acceleration and averaged amplitudes
+# Set the variables for animating a time cursor moving across plots of the clipped ground acceleration and averaged accelerations
 ani_start = 0 # [s] Set the time to start the animation
 ani_dur = 181 # [s] Set the duration of the animation (to animate the entire recording set ani_dur > 180)
 ani_step = 0.2 # [s] Set the amount of time to spend on each animation frame
@@ -130,7 +131,7 @@ def plot_motion(dt, vals, row, col, n, title, fig):
     ax.set_ylim(-750, 750)
     ax.set_ylabel(r'Acceleration [cm/s$^2$]')
     ax.minorticks_on()
-    ax.xaxis.set_tick_params(which='minor', bottom=False) # Minor ticks only on the y-axis
+    ax.xaxis.set_tick_params(which='minor', bottom=False) # Minor ticks on the y-axis
     ax.label_outer()
     fig.tight_layout()
 
@@ -139,7 +140,7 @@ def filter(dt, vals, file):
     
     filt_vals: each array is the filtered ground motions for a different bandpass
     filt_bands: each array is the lower and upper edges of the bandpass
-    filt_sum: the sum of all the filtered frequencies' amplitudes
+    filt_sum: the sum of all the filtered frequencies' accelerations
     vals: the raw ground acceleration clipped to the earthquake event
     """
     # Clip the raw data to the earthquake event as decided by the base value
@@ -209,7 +210,7 @@ def plot_filtered(dt, vals, filt_vals, filt_sum, cutoffs, file, title):
     ax.set_ylabel(r'Acceleration [cm/s$^2$]')
     ax.set_xlim(0, dt*len(vals))
     ax.minorticks_on()
-    ax.xaxis.set_tick_params(which='minor', bottom=False) # Minor ticks only on the y-axis
+    ax.xaxis.set_tick_params(which='minor', bottom=False) # Minor ticks on the y-axis
     plt.savefig(file+' '+title+'.png', dpi=300) # Save the plot as a .png
     plt.close()
 
@@ -221,7 +222,7 @@ def average_amp(record, file, span):
         for k in np.arange(span, len(record[j]), span):
             mean.append(np.mean(np.abs(record[j][k-span : k]))) # Find the average acceleration over the block of time
         avg.append(mean)
-    averages[file] = avg # Enter the averaged amplitudes in a dictionary with the filename as the key
+    averages[file] = avg # Enter the averaged accelerations in a dictionary with the filename as the key
 
 def plot_avg(avg, cutoffs, file, title):
     """ Plot the averaged ground acceleration values that are used to set the audio variables. Save the resulting plot as a .png """
@@ -251,33 +252,34 @@ def audio(avg, file):
     max_vol = 120 # Maximum allowed by MIDI is 127
     vol = 40*np.log(x) + min_vol # Create a logarithmic velocity array
     vol = vol[np.all([min_vol<vol, vol<max_vol], axis=0)] # Clip the velocity array to the max and min volumes
-    dis_v = np.linspace(base, top, len(vol)) # Set up a matching array from min to max amplitudes
-    inter_vol = interpolate.interp1d(dis_v, vol) # Create a linear interpolation function for acceleration to volume
+    acc_v = np.linspace(base, top, len(vol)) # Set up a matching array from min to max accelerations
+    inter_vol = interpolate.interp1d(acc_v, vol) # Create a linear interpolation function for acceleration to volume
     # Set up note length interpolation
+    tempo = 120 # Set the tempo in beats per minute (there are 480 ticks per beat)
     min_len = 40 # Minimum note length in ticks
-    max_len = int(block*960) # Set maximum ticks to the length of the block (default bpm = 120 so 960 ticks per second)
+    max_len = int(block*tempo/60*480) # Set maximum ticks to the length of the block (sec*beat/min*min/sec*ticks/beat = ticks)
     length = 0.2*x + min_len # Create a linear note length array
     length = length[np.all([min_len<length, length<max_len], axis=0)] # Clip the length array to the max and min lengths
-    dis_l = np.linspace(base, top, len(length)) # Set up a matching array from min to max amplitudes
-    inter_len = interpolate.interp1d(dis_l, length) # Create a linear interpolation function for acceleration to duration
+    acc_l = np.linspace(base, top, len(length)) # Set up a matching array from min to max accelerations
+    inter_len = interpolate.interp1d(acc_l, length) # Create a linear interpolation function for acceleration to duration
 
     # Write the midi file using mido
     midi_file = mido.MidiFile() # Create the midi file for the recording
-    rec = file+'' # Set the track and file names to the recording name + identifying features
+    rec = file+'' # Set the track and file names to the recording name + a string with the identifying features
     for j in np.arange(len(pent)):
         track = mido.MidiTrack() # Create a midi track on the file for each filtered frequency
         midi_file.tracks.append(track) # Attach the midi track to the midi file
         track.append(mido.MetaMessage('track_name', name=rec+' '+str(pent[j]))) # Set the name of the midi track to the filename + the pitch
-        track.append(mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(120), time=0)) # Set the tempo in beats per minute
-        if j%2 == 0: # Change channels and controls every two filtered EQ frequencies
+        track.append(mido.MetaMessage('set_tempo', tempo=mido.bpm2tempo(tempo), time=0)) # Set the tempo in beats per minute for the track
+        if j%2 == 0: # Change channels and controls every two frequency bands
             chan = [0,1,2,3,4,5,6,7,8,10,11,12,13,14,15,15][int(j/2)] # There are 16 midi channels but 10 (index 9) is only percussion
-            inst = [66,66, 56,56,56, 57,57,57,57, 71,71,71, 75,75,75,75][int(j/2)] # Set instruments to use
+            inst = [66,66, 56,56,56, 57,57,57,57, 71,71,71, 75,75,75,75][int(j/2)] # Set general MIDI instruments to use
             random.seed(0)
             pan = random.sample(range(4,128,8),16)[int(j/2)] # Generate random pan positions (min possible = 0, max possible = 127)
         track.append(mido.Message('program_change', channel=chan, program=inst)) # Set instrument for the channel
         track.append(mido.Message('control_change', channel=chan, control=10, value=pan)) # Set pan for the channel
         for k in np.arange(len(avg[j])):
-            curr_avg = avg[j][k] # Select the current value of the averaged amplitudes
+            curr_avg = avg[j][k] # Select the current value of the averaged accelerations
             if curr_avg < base: # If the acceleration is below the allowed range make it silent
                 vel = 0
                 time_len = min_len
@@ -299,19 +301,19 @@ def audio(avg, file):
             track.append(mido.Message('note_off', channel=chan, note=pent[j], time=(max_len-ticks))) # Leave the note off for the rest of the block
     if big: # If any average acceleration in the recording was above the interpolation range
         print("\nThe maximum acceleration averaged over {0} seconds exceeded {1} [cm/s^2] \n{2} underrepresents the ground acceleration's intensity".format(str(block),str(top),rec))
-        rec = rec+' (over max)'    
+        rec = rec+' (over max)' # Change the file name to indicate it went over the max acceleration 
     midi_file.save(rec+'.mid') # Save the midi file for the recording
     print('\nCompleted MIDI file for {0}'.format(rec))
 
     # Convert the midi file to audio (.flac format) using FluidSynth
-    if platform.system()=='Darwin':
+    if platform.system()=='Darwin': # Mac sometimes prints two fluidsynth: panic messages, not sure why, the audio comes out fine
         print('\nIgnore the following two "fluidsynth: panic" messages')
     subprocess.run(['fluidsynth', '-o','synth.reverb.width=40', '-o','synth.reverb.room-size=0.4',
-                    '-ni', '-q', '-g','0.5', 'MuseScore_General.sf2', rec+'.mid','-F',rec+'.flac'])
+                    '-ni', '-q', '-g','0.5', 'MuseScore_General.sf2', rec+'.mid','-F',rec+'.flac']) # Run FluidSynth
     print('\nSaved audio as a flac file for {0}'.format(rec))
 
 def animate_cursor(dt, vals, avg, file, title):
-    """ Animate a time cursor moving across plots of the clipped ground acceleration and averaged amplitudes """
+    """ Animate a time cursor moving across plots of the clipped ground acceleration and averaged accelerations """
     print('\nBeginning animation for {0}'.format(file))
     # Set up the figure for the two plots
     fig = plt.figure(num=4, figsize=(12.8,8))
@@ -340,7 +342,7 @@ def animate_cursor(dt, vals, avg, file, title):
     axs[1].set_ylim(base,top)
     axs[1].text(0.42, 0.95, 'Mean Filtered Acceleration', transform=axs[1].transAxes, bbox=props)
 
-    # Create a gradient colorbar
+    # Create a gradient colorbar as a legend
     cbar_ax = axs[1].inset_axes([0.985,0.125,0.015,0.77])
     for i in np.arange(len(avg)):
         cbar_ax.barh(i, width=1, height=1, align='edge', linewidth=0, alpha=0.6)
@@ -350,27 +352,27 @@ def animate_cursor(dt, vals, avg, file, title):
     cbar_ax.set_ylabel('Wave Frequency [Hz]')
     cbar_ax.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
 
-
+    # Apply a tight layout with ticks only on the outer axes
     axs[0].label_outer()
     axs[1].label_outer()
     fig.tight_layout()
 
     # Animate the motion of the cursor
-    start = ani_start
-    end = start + ani_dur
+    start = ani_start # Start time
+    end = start + ani_dur # End time
     if end > dt*len(vals): # If the end time is greater than the audio duration set end = audio duration
         end = dt*len(vals)
         if start > end: # If the start time is greater than the end time set start = 0 seconds
             start = end - ani_dur
-    c_x = np.arange(start, end+ani_step/2, ani_step)
-    cursor1 = axs[0].plot([c_x[0],c_x[0]], [mult*np.min(vals), mult*np.max(vals)], color='k')
-    cursor2 = axs[1].plot([c_x[0],c_x[0]], [base,top], color='k')
-    def animate(i):
+    c_x = np.arange(start, end+ani_step/2, ani_step) # Set up the array of cursor positions
+    cursor1 = axs[0].plot([c_x[0],c_x[0]], [mult*np.min(vals), mult*np.max(vals)], color='k') # Plot the cursor on plot 1
+    cursor2 = axs[1].plot([c_x[0],c_x[0]], [base,top], color='k') # Plot the cursor on plot 2
+    def animate(i): # Create the function that will make the cursor step through the c_x array
         plt.setp(cursor1, data=([i,i], [mult*np.min(vals), mult*np.max(vals)]))
         plt.setp(cursor2, data=([i,i], [base,top]))
         return (cursor1,cursor2)
-    ani = animation.FuncAnimation(fig, animate, frames=c_x, interval=int(ani_step*1000))
-    vid_writer = animation.FFMpegWriter(fps=1/ani_step, bitrate=500)
+    ani = animation.FuncAnimation(fig, animate, frames=c_x, interval=int(ani_step*1000)) # Animate the cursor
+    vid_writer = animation.FFMpegWriter(fps=1/ani_step, bitrate=500) # Set the export quality of the file
     ani.save('{0} {1} ({2:.1f} to {3:.1f}).mp4'.format(file,'animation',start,end), writer=vid_writer) # Save the animation as a .mp4
     plt.close()
     print('\nCompleted animation and saved mp4 file for {0} {1}'.format(file,'animation'))
@@ -389,19 +391,20 @@ earthquakes = []
 for i in np.arange(len(events)):
     earthquakes.append([events[i]+'/'+recordings[i][n] for n in np.arange(len(recordings[i]))])
 waves = {} # Create the dictionary to deposit filtered waves in
-averages = {} # Create the dictionary to deposit averaged amplitudes in
+averages = {} # Create the dictionary to deposit averaged accelerations in
 
 # Process the data for each earthquake
 for eq in earthquakes:
     # Extract the ground acceleration data for each earthquake using the sample code from seisfinder
     dts, values = sample_extraction(eq)
-    if in_g==True: # Convert from units of gravity to units of cm/s2
+    if in_g==True: # If required convert from units of gravity to units of cm/s2
         for i in np.arange(len(eq)):
             values[i] = values[i]*981
     
     # Plot the recorded ground acceleration at all recording sites in a single figure
     plot_recordings(eq)
     
+    # Process each recording
     for i in np.arange(len(eq)):
         # If the ground acceleration data is all smaller than the base value abort the conversion
         if np.all(values[i]<base):
@@ -413,15 +416,16 @@ for eq in earthquakes:
         # Plot the filtered frequencies and compare to the original ground acceleration
         plot_filtered(dts[i], clipped, filtered_vals, filtered_sum, filtered_bands, eq[i], 'Comparison of Filtered Approximation to Clipped Ground Acceleration Recording')
 
-        span = int(block/dts[i]) # Number of data points in each time block for the recording
-        # Average the amplitudes for each frequency over each time block and store in 'averages'
+        # Number of data points in each time block for the recording
+        span = int(block/dts[i])
+        # Average the accelerations for each frequency over each time block and store in 'averages'
         average_amp(waves[eq[i]], eq[i], span)
-        # Plot the average amplitudes for all frequencies in the recording
+        # Plot the average accelerations for all frequencies in the recording
         plot_avg(averages[eq[i]], filtered_bands, eq[i], 'Mean Filtered Acceleration')
 
         # Create and save a .mid MIDI file and .flac audio file for the filtered ground accelerations
         audio(averages[eq[i]], eq[i])
-        # Animate a time cursor moving across plots of the clipped ground acceleration and averaged amplitudes
+        # Animate a time cursor moving across plots of the clipped ground acceleration and averaged accelerations
         if make_ani == True:
             animate_cursor(dts[i], clipped, averages[eq[i]], eq[i], 'Visualisation of Audio')
 
