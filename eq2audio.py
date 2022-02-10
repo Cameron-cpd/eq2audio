@@ -2,14 +2,17 @@
 USER QuakeCoRE 2021/22
 Earthquakes to Audio
 Author: Cameron Davis
-Releases: https://github.com/Cameron-cpd/eq2audio/releases
+Version: 1.0.1
+
+If any updates are made they will be posted on GitHub at the link below
+Updates: https://github.com/Cameron-cpd/eq2audio/releases
 """
 
 # Specify the recording names and folder/event names, for each event list all .000 files then all .090 files
 events = ['AF8', 'Kaikoura'] # The earthquake names
 recordings = [['Franz Josef.000','Greymouth.000', 'Franz Josef.090','Greymouth.090'], # Recorded ground accelerations for the first earthquake
                 ['Kaikoura.000','Wellington.000', 'Kaikoura.090','Wellington.090']] # Recorded ground accelerations for the second earthquake
-in_g = False # If the recordings are in units of g put True, if they are in units of cm/s^2 put False
+in_g = False # If the recordings are in units of g put True, if they are in units of cm/s2 put False
 
 make_ani = False # If you want to create an animation for each recording put True
 # Creating the animation takes a while so it is best on one recording at a time and only in the area of interest
@@ -20,8 +23,8 @@ ani_step = 0.2 # [s] Set the amount of time to spend on each animation frame
 
 """
 # Single recording
-events = ['4.6 (historic)']
-recordings = [['D14C.000', 'D14C.090']]
+events = ['kaikoura (historic)']
+recordings = [['KEKS.090']]
 in_g = True
 """
 """
@@ -31,7 +34,7 @@ recordings = [['CastleHill.000','Christchurch.000','FranzJosef.000','Greymouth.0
                 ['CastleHill.000','Christchurch.000','RockDyers.000','SoilCity.000','SoilLyttelton.000', 'CastleHill.090','Christchurch.090','RockDyers.090','SoilCity.090','SoilLyttelton.090'],
                 ['CastleHill.000','Christchurch.000', 'CastleHill.090','Christchurch.090'],
                 ['CastleHill.000','Christchurch.000','Kaikoura.000','KIKS.000','POTS.000','TEPS.000','Wellington.000', 'CastleHill.090','Christchurch.090','Kaikoura.090','KIKS.090','POTS.090','TEPS.090','Wellington.090']]
-in_g = False # The above recordings are in units of cm/s^2 so do not need to be converted
+in_g = False # The above recordings are in units of cm/s2 so do not need to be converted
 """
 """
 # Historic recordings
@@ -39,7 +42,7 @@ events = ['kaikoura (historic)', '4.6 (historic)','CHCH (historic)']
 recordings = [['KIKS.000','KEKS.000', 'KIKS.090','KEKS.090'],
                 ['D14C.000','D14C.090'],
                 ['HVSC.000','LPOC.000','REHS.000', 'HVSC.090','LPOC.090','REHS.090']]
-in_g = True # The above recordings are in units of g so need to be converted to cm/s^2
+in_g = True # The above recordings are in units of g so need to be converted to cm/s2
 """
 
 # Import required modules
@@ -300,7 +303,7 @@ def audio(avg, file):
                 ticks += 2*time_len
             track.append(mido.Message('note_off', channel=chan, note=pent[j], time=(max_len-ticks))) # Leave the note off for the rest of the block
     if big: # If any average acceleration in the recording was above the interpolation range
-        print("\nThe maximum acceleration averaged over {0} seconds exceeded {1} [cm/s^2] \n{2} underrepresents the ground acceleration's intensity".format(str(block),str(top),rec))
+        print("\nThe maximum acceleration averaged over {0} seconds exceeded {1} cm/s2 \n{2} underrepresents the ground acceleration's intensity".format(str(block),str(top),rec))
         rec = rec+' (over max)' # Change the file name to indicate it went over the max acceleration 
     midi_file.save(rec+'.mid') # Save the midi file for the recording
     print('\nCompleted MIDI file for {0}'.format(rec))
@@ -379,9 +382,9 @@ def animate_cursor(dt, vals, avg, file, title):
 
 
 # Set key processing variables
-base = 1 # [cm/s^2] Set the minimum acceleration that counts as an earthquake
+base = 1 # [cm/s2] Set the minimum acceleration that counts as an earthquake
 # The minimum average acceleration for the interpolation range is the base value
-top = 125 # [cm/s^2] Set the maximum average acceleration for the interpolation range
+top = 125 # [cm/s2] Set the maximum average acceleration for the interpolation range
 block = 0.2 # [s] Number of seconds in each time block
 bands = create_bands() # Generate the centre frequencies for bandpass filtering
 pent = create_pent(root=34) # Generate a pentatonic scale starting on MIDI pitch 34 (Bb1)
